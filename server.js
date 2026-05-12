@@ -51,6 +51,20 @@ app.post('/api/run-batch', async (req, res) => {
         res.write(`data: ${JSON.stringify(msg)}\n\n`);
     };
 
+    try {
+        // If this line fails, the code jumps to the catch block 
+        // below the loop and the loop never starts!
+        const payloadsArray = JSON.parse(req.body.payloads);
+
+        for (const item of payloadsArray) {
+            // ... axios call ...
+            res.write(`data: ${JSON.stringify({ status: 'processing' })}\n\n`);
+        }
+    } catch (err) {
+        console.log("SERVER ERROR:", err.message);
+        res.write(`data: ${JSON.stringify({ error: "Failed to parse payloads" })}\n\n`);
+    }
+
     // Prevent timeout for large batches
     req.socket.setTimeout(0);
 
