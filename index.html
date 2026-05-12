@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Custom API Runner</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+</head>
+
+<body class="bg-gray-900 text-white p-8">
+    <!-- START OF DIV.APP -->
+    <div id="app" class="max-w-4xl mx-auto">
+
+        <h1 class="text-3xl font-bold mb-6">🚀 API Batch Runner</h1>
+
+        <!-- Tab Navigation -->
+        <div class="flex space-x-2 mb-6 border-b border-gray-700">
+            <button 
+                @click="activeTab = 'runner'"
+                :class="activeTab === 'runner' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-800'"
+                class="px-4 py-2 rounded-t-lg transition-colors">
+                🚀 Runner
+            </button>
+            <button 
+                @click="activeTab = 'config'"
+                :class="activeTab === 'config' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-800'"
+                class="px-4 py-2 rounded-t-lg transition-colors">
+                ⚙️ Configuration
+            </button>
+        </div>
+
+        <!-- Tab 1: Runner (The Main Workspace) -->
+         <div v-show="activeTab === 'runner'" class="space-y-4">
+
+            <!-- Collection Toolbar -->
+            <div class="bg-gray-800 p-3 rounded-lg mb-6 flex items-center justify-between border border-gray-700">
+                <div class="flex items-center space-x-3">
+                    <label class="text-sm font-bold text-blue-400">COLLECTION:</label>
+                    <select v-model="activeCollectionName" @change="loadCollection" class="bg-gray-800 text-white border border-gray-700 rounded px-3 py-2 outline-none cursor-pointer">
+                        <option v-for="col in collections" :key="col.name" :value="col.name">
+                            {{ col.name }}
+                        </option>
+                    </select>
+                </div>
+                
+                <div class="flex space-x-2">
+                    <button @click.prevent="saveCollection" class="text-xs bg-green-700 hover:bg-green-600 px-3 py-1 rounded">💾 Save Current</button>
+                    <button @click.prevent="renameAndSave" class="btn-secondary">Rename</button>
+                    <button @click.prevent="addNewCollection" class="text-xs bg-blue-700 hover:bg-blue-600 px-3 py-1 rounded">➕ New</button>
+                    <button @click.prevent="deleteCollection" class="text-xs bg-red-900 hover:bg-red-800 px-3 py-1 rounded">🗑️ Delete</button>
+                </div>
+            </div>
+
+            <!-- URL & Method Row -->
+            <div class="flex space-x-2">
+                <select v-model="selectedMethod" class="bg-gray-800 border border-gray-700 p-2 rounded">
+                    <option>GET</option>
+                    <option>POST</option>
+                    <option>PUT</option>
+                    <option>DELETE</option>
+                </select>
+                <input v-model="url" class="flex-1 bg-gray-800 border border-gray-700 p-2 rounded" placeholder="https://api.example.com/v1/resource">
+                <input 
+                    type="number" 
+                    v-model="iterations" 
+                    class="bg-gray-800 border border-gray-700 rounded px-2 py-1 w-20"
+                    placeholder="1"
+                >
+            </div>
+
+            <!-- Payloads & Terminal -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium mb-1 text-gray-400">Payloads (JSON Array)</label>
+                    <textarea v-model="payloadText" rows="12" class="w-full bg-gray-900 border border-gray-700 p-2 rounded font-mono text-sm"></textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1 text-gray-400">Execution Log</label>
+                    <div id="terminal" class="h-[288px] bg-black border border-gray-700 p-2 rounded font-mono text-xs overflow-y-auto">
+                        <div v-for="log in logs" :class="log.type === 'success' ? 'text-green-400' : 'text-red-400'">
+                            > {{ log.message }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Response Body Section -->
+            <div>
+                <label class="block text-sm font-medium mb-1 text-gray-400">Latest Response JSON</label>
+                <textarea v-model="responseBody" rows="8" readonly class="w-full bg-gray-900 border border-gray-700 p-2 rounded font-mono text-sm text-yellow-200"></textarea>
+            </div>
+
+            <button @click="runRequests" :disabled="loading" class="w-full bg-blue-600 hover:bg-blue-700 p-3 rounded font-bold">
+                {{ loading ? 'Running Batch...' : 'Execute Batch' }}
+            </button>
+         </div>
+
+         <!-- Tab 2: Configuration (The Settings Workspace) -->
+         <div v-show="activeTab === 'config'" class="space-y-4">
+            <div class="bg-gray-800 p-6 rounded-lg border border-gray-700">
+                <h2 class="text-xl font-bold mb-4">Request Headers</h2>
+                <p class="text-gray-400 text-sm mb-4">Set your Auth tokens, Content-Type, and other global headers here.</p>
+                
+                <textarea v-model="headers" rows="15" 
+                    class="w-full bg-gray-900 border border-gray-700 p-3 rounded font-mono text-sm text-blue-300"
+                    placeholder='{ "Authorization": "Bearer ..." }'></textarea>
+                    
+                <div class="mt-4 p-3 bg-blue-900/30 border border-blue-800 rounded text-sm text-blue-200">
+                    <strong>Note:</strong> Changes are automatically saved to your browser's local storage.
+                </div>
+            </div>
+         </div>
+
+
+</div> 
+
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="app.js"></script>
+
+</body>
+</html>
