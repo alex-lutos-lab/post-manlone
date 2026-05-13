@@ -11,7 +11,7 @@
     <!-- START OF DIV.APP -->
     <div id="app" class="max-w-4xl mx-auto">
 
-        <h1 class="text-3xl font-bold mb-6">🚀 Post Manlone</h1>
+        <!-- <h1 class="text-3xl font-bold mb-6">🚀 Post Manlone</h1> -->
 
         <!-- Tab Navigation -->
         <div class="flex space-x-2 mb-6 border-b border-gray-700">
@@ -36,17 +36,34 @@
             <div class="bg-gray-800 p-3 rounded-lg mb-6 flex items-center justify-between border border-gray-700">
                 <div class="flex items-center space-x-3">
                     <label class="text-sm font-bold text-blue-400">COLLECTION:</label>
-                    <select v-model="activeCollectionName" @change="loadCollection" class="bg-gray-800 text-white border border-gray-700 rounded px-3 py-2 outline-none cursor-pointer">
-                        <option v-for="col in collections" :key="col.name" :value="col.name">
-                            {{ col.name }}
-                        </option>
-                    </select>
+                    
+                    <!-- View Mode -->
+                    <div v-if="!isEditingName">
+                        <select v-model="activeCollectionName" @change="loadCollection" class="bg-gray-800 text-white border border-gray-700 rounded px-3 py-2 outline-none cursor-pointer">
+                            <option v-for="col in collections" :key="col.name" :value="col.name">
+                                {{ col.name }}
+                            </option>
+                        </select>
+                        <button @click.prevent="startRename" :disabled="activeCollectionName === 'Default'" class="text-xs bg-gray-900 hover:bg-gray-800 px-3 py-1 ml-2 rounded">✏️ Rename</button>
+                    </div>
+
+                    <!-- Edit Mode -->
+                    <div v-else class="edit-group">
+                        <input 
+                            ref="renameInput"
+                            v-model="editingName" 
+                            @keyup.enter="confirmRename" 
+                            @keyup.esc="cancelRename"
+                            class="rename-input bg-gray-800"
+                        />
+                        <button @click="confirmRename" class="btn-save ml-4">Save</button>
+                        <button @click="cancelRename" class="btn-cancel ml-4">Cancel</button>
+                    </div>
                 </div>
                 
                 <div class="flex space-x-2">
                     <button @click.prevent="saveCollection" class="text-xs bg-green-700 hover:bg-green-600 px-3 py-1 rounded">💾 Save Current</button>
                     <button @click.prevent="addNewCollection" class="text-xs bg-blue-700 hover:bg-blue-600 px-3 py-1 rounded">➕ New</button>
-                    <button @click.prevent="renameAndSave" class="text-xs bg-gray-900 hover:bg-gray-800 px-3 py-1 rounded">📝 Rename</button>
                     <button @click.prevent="deleteCollection" class="text-xs bg-red-900 hover:bg-red-800 px-3 py-1 rounded">🗑️ Delete</button>
                 </div>
             </div>

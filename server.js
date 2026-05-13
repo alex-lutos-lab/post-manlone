@@ -51,20 +51,6 @@ app.post('/api/run-batch', async (req, res) => {
         res.write(`data: ${JSON.stringify(msg)}\n\n`);
     };
 
-    try {
-        // If this line fails, the code jumps to the catch block 
-        // below the loop and the loop never starts!
-        const payloadsArray = JSON.parse(req.body.payloads);
-
-        for (const item of payloadsArray) {
-            // ... axios call ...
-            res.write(`data: ${JSON.stringify({ status: 'processing' })}\n\n`);
-        }
-    } catch (err) {
-        console.log("SERVER ERROR:", err.message);
-        res.write(`data: ${JSON.stringify({ error: "Failed to parse payloads" })}\n\n`);
-    }
-
     // Prevent timeout for large batches
     req.socket.setTimeout(0);
 
@@ -72,7 +58,7 @@ app.post('/api/run-batch', async (req, res) => {
     let parsedHeaders = {};
     let parsedPayloads = [];
 
-    // 2. SMART PARSING (Handles single objects OR arrays)
+    // 2. SMART PARSING (This replaces the old broken block)
     try {
         if (typeof headers === 'string' && headers.trim() !== "") {
             parsedHeaders = JSON.parse(headers);
@@ -80,13 +66,17 @@ app.post('/api/run-batch', async (req, res) => {
 
         if (typeof payloads === 'string' && payloads.trim() !== "") {
             const cleaned = payloads.trim();
-            // If it starts with [, it's already an array
+            // UNIVERSAL LOGIC: 
+            // If it starts with [, parse it as an array. 
+            // Otherwise, parse it as an object and wrap it in [].
             if (cleaned.startsWith('[')) {
                 parsedPayloads = JSON.parse(cleaned);
             } else {
-                // Otherwise, wrap the single object into an array
                 parsedPayloads = [JSON.parse(cleaned)];
             }
+        } else if (typeof payloads === 'object' && payloads !== null) {
+            // Safety check: if it's already an object (from req.body), wrap it
+            parsedPayloads = Array.isArray(payloads) ? payloads : [payloads];
         }
     } catch (e) {
         sendLog({ message: `❌ JSON Syntax Error: ${e.message}`, type: "error" });
@@ -97,10 +87,10 @@ app.post('/api/run-batch', async (req, res) => {
 
     // 3. EXECUTION LOOP
     try {
+        // This loop now safely uses parsedPayloads which is GUARANTEED to be an array
         for (let i = 0; i < (iterations || 1); i++) {
             sendLog({ message: `--- Iteration ${i + 1} ---`, type: "info" });
             
-            // Keep-alive heartbeat
             res.write(': heartbeat\n\n'); 
 
             await Promise.all(parsedPayloads.map(async (data, index) => {
@@ -135,6 +125,30 @@ app.post('/api/run-batch', async (req, res) => {
 
     sendLog({ message: "✅ All requests completed.", type: "info" });
     res.end();
+});
+
+app.put('/api/collections/rename', (req, res) => {
+    const { oldName, newName } = req.body;
+    console.log("Request received for:", oldName, "to", newName);
+
+    if (!oldName || !newName) {
+        return res.status(400).json({ error: "Both oldName and newName are required" });
+    }
+
+    const sql = `UPDATE collections SET name = ? WHERE name = ?`;
+
+    console.log(`Executing SQL: UPDATE collections SET name = ${newName} WHERE name = ${oldName}`);
+    db.run(sql, [newName, oldName], function(err) {
+        console.log("Inside db.run callback!");
+        if (err) {
+            console.error("DB Update Error:", err.message);
+            return res.status(500).json({ error: "Database error occurred" });
+        }
+        res.json({ success: true, message: "Collection renamed" });
+    });
+
+    return res.json({ success: true, message: "Testing bypass" });
+
 });
 
 app.post('/api/save-collection', async (req, res) => {

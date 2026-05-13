@@ -22,7 +22,11 @@ createApp({
             // Output & Logs
             logs: [],
             results: [],
-            responseBody: ''
+            responseBody: '',
+
+            // Edit mode
+            isEditingName: false,
+            editingName: ''
         }
 },
 
@@ -68,11 +72,7 @@ createApp({
             
             // Ensure iterations is a number and has a fallback
             this.iterations = parseInt(col.iterations) || 1;
-            
-            console.log(`📂 Switched to collection: ${this.activeCollectionName}`);
         },
-
-
 
         async persistToServer() {
             try {
@@ -94,7 +94,6 @@ createApp({
                 console.error("Save Error:", err.message);
             }
         },
-
 
         getLogClass(type) {
             switch (type) {
@@ -242,45 +241,57 @@ createApp({
             console.log(`✨ Created and saved new collection: ${name}`);
         },
 
-        async renameAndSave() {
-            const oldName = this.activeCollectionName;
-            const newName = prompt("Enter new name for this collection:", oldName);
+        // async renameAndSave() {
+        //     const oldName = this.activeCollectionName;
+        //     const newName = prompt("Enter new name for this collection:", oldName);
 
-            // 1. Validation: Don't do anything if they cancel or keep the name the same
-            if (!newName || newName === oldName) return;
+        //     // Validation: Don't do anything if they cancel or keep the name the same
+        //     if (!newName || newName === oldName || newName.trim() === "") return;
 
-            // 2. Validation: Prevent renaming the "Default" collection if you want to keep it as a base
-            if (oldName === 'Default') {
-                alert("The 'Default' collection cannot be renamed. Try creating a new one instead!");
-                return;
-            }
+        //     try {
+        //         const response = await fetch ('http://localhost:5000/api/collections/rename', {
+        //             method: 'PUT',
+        //             headers: { 'Content-Type': 'application/json' },
+        //             body: JSON.stringify({ oldName, newName })
+        //         });
 
-            try {
-                // 3. Update the UI state
-                this.activeCollectionName = newName;
+        //         if (!response.ok) throw new Error("Rename failed on server");
 
-                // 4. Save to DB (This creates a new record with the new name)
-                await this.persistToServer();
+        //         // Update the local list WITHOUT re-fetching everything
+        //         const item = this.collections.find(c => c.name === oldName);
+        //         if (item) {
+        //             item.name = newName;
+        //         }
 
-                // 5. Optional: Delete the old record so you don't have duplicates
-                await fetch(`http://localhost:5000/api/delete-collection/${encodeURIComponent(oldName)}`, {
-                    method: 'DELETE'
-                });
+        //         // Update the pointer
+        //         this.activeCollectionName = newName;
 
-                // 6. Refresh the list to show the new name in the dropdown
-                const resp = await fetch('http://localhost:5000/api/collections');
-                this.collections = await resp.json();
+                
+        //         // Refresh the list from the server
+        //         const resp = await fetch('http://localhost:5000/api/collections');
+        //         // const data = await resp.json();
+                
+        //         // Update the array first
+        //         // this.collections = data;
+        //         this.collections = await resp.json();
 
-                console.log(`📝 Renamed "${oldName}" to "${newName}"`);
-                alert("Collection renamed successfully!");
+        //         // THE FIX: Explicitly re-set the active name 
+        //         // This forces the dropdown to find the matching entry in the new list
+        //         setTimeout(() => {
+        //             this.activeCollectionName = newName;
+        //             console.log("Forcing dropdown to:", this.activeCollectionName);
+        //         }, 50);
+                
 
-            } catch (err) {
-                console.error("Rename Error:", err);
-                // Revert UI name if the save fails
-                this.activeCollectionName = oldName;
-                alert("Failed to rename. Check server connection.");
-            }
-        },
+        //         console.log(`📝 Renamed "${oldName}" to "${newName}"`);
+
+        //     } catch (err) {
+        //         console.error("Rename Error:", err);
+        //         // Revert UI name if the save fails
+        //         this.activeCollectionName = oldName;
+        //         alert("Failed to rename. Check server connection.");
+        //     }
+        // },
 
         async deleteCollection() {
             const nameToDelete = this.activeCollectionName;
@@ -320,5 +331,62 @@ createApp({
                 alert("Error deleting collection. Is the server running?");
             }
         },
+
+        startRename() {
+            if (this.activeCollectionName === 'Default') return;
+            
+            this.editingName = this.activeCollectionName;
+            this.isEditingName = true;
+            
+            // Auto-focus the input after the DOM updates
+            this.$nextTick(() => {
+                this.$refs.renameInput?.focus();
+            });
+        },
+
+        cancelRename() {
+            this.isEditingName = false;
+            this.editingName = '';
+        },
+
+        async confirmRename() {
+            console.log("confirm rename")
+            const oldName = this.activeCollectionName;
+            const newName = this.editingName.trim();
+
+            if (!newName || newName === oldName) {
+                return this.cancelRename();
+            }
+
+            console.log("Attempting fetch...");
+            
+
+            try {
+                console.log("confirm rename 2")
+                const response = await fetch('http://localhost:5000/api/collections/rename', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ oldName, newName })
+                });
+                
+                console.log("Fetch settled. Status:", response.status);
+
+                if (response.ok) {
+                    // Update the list item
+                    const item = this.collections.find(c => c.name === oldName);
+                    if (item) item.name = newName;
+
+                    // Update the pointer and close editor
+                    this.activeCollectionName = newName;
+
+                    console.log("Rename Successful")
+                    // Flip the toggle back to show the dropdown/text view
+                    this.isEditingName = false;
+                }
+            } catch (err) {
+                console.error("Rename failed:", err);
+            }
+        }
+
     }
 }).mount('#app');
