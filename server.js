@@ -8,8 +8,7 @@ let db;
         driver: sqlite3.Database
     });
 
-    // Create the table if it doesn't exist
-    console.log("Database is ready!");
+    // Create Collections Table
     await db.exec(`
         CREATE TABLE IF NOT EXISTS collections (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -21,6 +20,18 @@ let db;
             iterations INTEGER DEFAULT 1
         )
     `);
+
+    // Create Environments Table
+    await db.exec(`
+        CREATE TABLE IF NOT EXISTS environments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE,
+            variables TEXT -- Stored as a JSON string
+        )
+    `);
+
+    console.log("Database is ready!");
+
 })();
 
 const express = require('express');
@@ -179,7 +190,6 @@ app.post('/api/save-collection', async (req, res) => {
     }
 });
 
-// Add a route to Load all
 app.get('/api/collections', async (req, res) => {
     const collections = await db.all('SELECT * FROM collections');
     res.json(collections);
@@ -215,6 +225,38 @@ app.delete('/api/delete-collection/:name', (req, res) => {
         console.log(`🗑️ Deleted collection: ${name}`);
         res.json({ message: "Deleted successfully" });
     });
+});
+
+app.get('/api/environments', async (req, res) => {
+    try {
+        const rows = await db.all("SELECT * FROM environments");
+        // Parse the 'variables' string back into a JSON object for each row
+        const data = rows.map(row => ({
+            ...row,
+            variables: JSON.parse(row.variables || '{}')
+        }));
+        res.json(data);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/environments', async (req, res) => {
+    const { name, variables } = req.body; // variables should be an object
+    const varsString = JSON.stringify(variables);
+    
+    try {
+        // This SQL handles both "New" and "Edit" (Upsert logic)
+        const sql = `
+            INSERT INTO environments (name, variables) 
+            VALUES (?, ?)
+            ON CONFLICT(name) DO UPDATE SET variables = excluded.variables
+        `;
+        const result = await db.run(sql, [name, varsString]);
+        res.json({ id: result.lastID, message: "Environment saved" });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 app.listen(5000, () => console.log('Backend engine running on port 5000'));

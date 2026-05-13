@@ -4,8 +4,13 @@ createApp({
     // DATA: This defines the "state" of your app (the variables)
     data() {
         return {
+            
             // UI State
             activeTab: 'runner',
+            environments: [],
+            activeEnv: null,
+            editingEnv: null,
+            tempkeys: {},
             loading: false,
             
             // Collection Identity
@@ -31,6 +36,9 @@ createApp({
 },
 
     async mounted() {
+        this.loadEnvironments();
+        this.loadCollection();
+        
     try {
         const resp = await fetch('http://localhost:5000/api/collections');
         if (!resp.ok) throw new Error("Failed to fetch from server");
@@ -59,6 +67,45 @@ createApp({
 
     // METHODS: This defines the "actions" your app can take
     methods: {
+        // Helper to replace variables in a string
+        parseTemplate(text) {
+            if (!text || !this.activeEnv || !this.activeEnv.variables) return text;
+
+            let processed = text;
+            const vars = this.activeEnv.variables;
+
+            // Loop through all keys in the active environment
+            Object.keys(vars).forEach(key => {
+                const placeholder = `{{${key}}}`;
+                const value = vars[key];
+                // Replace all instances of the placeholder with the actual value
+                processed = processed.split(placeholder).join(value);
+            });
+
+            return processed;
+        },
+
+        async runTest() {
+            // 1. Process the URL and Payload with variables
+            const finalUrl = this.parseTemplate(this.activeRequest.url);
+            const finalPayload = this.parseTemplate(this.activeRequest.payload);
+            
+            // 2. Now use finalUrl and finalPayload in your fetch() call
+            console.log("🚀 Actually fetching:", finalUrl);
+            
+            try {
+                const response = await fetch(finalUrl, {
+                    method: this.activeRequest.method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: this.activeRequest.method !== 'GET' ? finalPayload : null
+                });
+                
+                // ... existing response handling
+            } catch (err) {
+                console.error("Request Failed:", err);
+            }
+
+        },
 
         // applyCollection is the primary "loader"
         applyCollection(col) {
@@ -110,18 +157,26 @@ createApp({
             this.results = []; // Clear results tab too
 
             try {
-                // 1. AUTO-SAVE: Persist current state before running
+                // 1. AUTO-SAVE: Persist current state
                 await this.persistToServer();
 
-                // 2. TRIGGER BATCH: Send raw text to the server
+                // --- NEW STEP: APPLY ENVIRONMENT VARIABLES ---
+                // We process the URL and Payloads before sending them to the batch runner
+                const processedUrl = this.applyVariables(this.url);
+                const processedPayloads = this.applyVariables(this.payloadText);
+                const processedHeaders = this.applyVariables(this.headers); // Optional: if you use variables in headers
+
+                console.log("🚀 Batch running on:", processedUrl);
+
+                // 2. TRIGGER BATCH: Send the PROCESSED data to the server
                 const response = await fetch('http://localhost:5000/api/run-batch', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        url: this.url,
+                        url: processedUrl,         // Use processed version
                         method: this.selectedMethod,
-                        headers: this.headers,
-                        payloads: this.payloadText, // Send as string; server handles the [] logic
+                        headers: processedHeaders,  // Use processed version
+                        payloads: processedPayloads, // Use processed version
                         iterations: parseInt(this.iterations) || 1
                     })
                 });
@@ -386,6 +441,130 @@ createApp({
             } catch (err) {
                 console.error("Rename failed:", err);
             }
+        },
+
+        selectEnvToEdit(env) {
+            // We use JSON.parse(JSON.stringify()) to create a "Deep Copy"
+            // This way, if you change text but don't hit Save, the original data isn't ruined
+            this.editingEnv = JSON.parse(JSON.stringify(env));
+            
+            // Sync the temporary keys used for renaming
+            this.tempKeys = {};
+            Object.keys(this.editingEnv.variables).forEach(k => {
+                this.tempKeys[k] = k;
+            });
+        },
+
+        addNewVariable() {
+            const newKey = "new_variable_" + Date.now();
+            this.editingEnv.variables[newKey] = "";
+            this.tempKeys[newKey] = "new_variable";
+        },
+
+        deleteVariable(key) {
+            delete this.editingEnv.variables[key];
+            delete this.tempKeys[key];
+        },
+
+        async loadEnvironments() {
+            try {
+                const response = await fetch('http://localhost:5000/api/environments');
+                if (response.ok) {
+                    const data = await response.json();
+                    // Map the data to ensure variables are parsed if the backend sends them as strings
+                    this.environments = data.map(env => ({
+                        ...env,
+                        variables: typeof env.variables === 'string' ? JSON.parse(env.variables) : env.variables
+                    }));
+                    console.log("Environments loaded:", this.environments);
+                }
+            } catch (err) {
+                console.error("Failed to load environments:", err);
+            }
+        },
+
+        async saveEnvironment() {
+            try {
+                const response = await fetch('http://localhost:5000/api/environments', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: this.editingEnv.name,
+                        variables: this.editingEnv.variables
+                    })
+                });
+                if (response.ok) {
+                    await this.loadEnvironments(); // Refresh the list
+                    alert("Environment Saved!");
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        },
+
+        savePreferenceLocally() {
+            if (this.activeEnv) {
+                // Save the ID so we can look it up on next page load
+                localStorage.setItem('activeEnvId', this.activeEnv.id);
+                console.log(`Preference saved: ${this.activeEnv.name}`);
+            } else {
+                localStorage.removeItem('activeEnvId');
+            }
+        },
+
+        // You should call this inside your 'mounted' hook or after loading environments
+        restorePreference() {
+            const savedId = localStorage.getItem('activeEnvId');
+            if (savedId && this.environments.length > 0) {
+                const found = this.environments.find(e => e.id == savedId);
+                if (found) this.activeEnv = found;
+            }
+        },
+
+        createNewEnv() {
+            // 1. Create a fresh template
+            const newEnv = {
+                id: null, // No ID yet since it's not in the DB
+                name: 'New Environment',
+                variables: {
+                    "base_url": "https://api.example.com" // Provide a default to help the user
+                }
+            };
+
+            // 2. Set it as the one we are currently editing
+            this.editingEnv = newEnv;
+
+            // 3. Initialize tempKeys for the new variables
+            this.tempKeys = {
+                "base_url": "base_url"
+            };
+
+            console.log("Creating new environment template...");
+        },
+
+        applyVariables(text) {
+            if (!text) return text;
+            if (!this.activeEnv) {
+                console.warn("⚠️ No active environment selected!");
+                return text;
+            }
+
+            let processedText = text;
+            const variables = this.activeEnv.variables;
+
+            // This looks for anything inside double curly braces: {{example}}
+            Object.keys(variables).forEach(key => {
+                const placeholder = `{{${key}}}`;
+                const value = variables[key];
+                
+                // We use .split().join() to replace ALL occurrences in the string
+                if (processedText.includes(placeholder)) {
+                    console.log(`✨ Replacing ${placeholder} with ${value}`);
+                    processedText = processedText.split(placeholder).join(value);
+                }
+            });
+
+            return processedText;
         }
 
     }

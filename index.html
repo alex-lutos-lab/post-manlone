@@ -22,6 +22,12 @@
                 🚀 Runner
             </button>
             <button 
+                @click="activeTab = 'env-manager'"
+                :class="activeTab === 'env-manager' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-800'"
+                class="px-4 py-2 rounded-t-lg transition-colors">
+                🚀 Environments
+            </button>
+            <button 
                 @click="activeTab = 'config'"
                 :class="activeTab === 'config' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-800'"
                 class="px-4 py-2 rounded-t-lg transition-colors">
@@ -59,10 +65,21 @@
                         <button @click="confirmRename" class="btn-save ml-4">Save</button>
                         <button @click="cancelRename" class="btn-cancel ml-4">Cancel</button>
                     </div>
+
+                    <div class="header-controls">
+                        <label>Active Environment:</label>
+                        <select class="bg-gray-800" v-model="activeEnv" @change="savePreferenceLocally">
+                            <option :value="null">None (Use Raw Values)</option>
+                            <option v-for="env in environments" :key="env.id" :value="env">
+                                {{ env.name }}
+                            </option>
+                        </select>
+                    </div>
+
                 </div>
                 
                 <div class="flex space-x-2">
-                    <button @click.prevent="saveCollection" class="text-xs bg-green-700 hover:bg-green-600 px-3 py-1 rounded">💾 Save Current</button>
+                    <button @click.prevent="saveCollection" class="text-xs bg-green-700 hover:bg-green-600 px-3 py-1 rounded">💾 Save</button>
                     <button @click.prevent="addNewCollection" class="text-xs bg-blue-700 hover:bg-blue-600 px-3 py-1 rounded">➕ New</button>
                     <button @click.prevent="deleteCollection" class="text-xs bg-red-900 hover:bg-red-800 px-3 py-1 rounded">🗑️ Delete</button>
                 </div>
@@ -112,7 +129,47 @@
             </button>
          </div>
 
-         <!-- Tab 2: Configuration (The Settings Workspace) -->
+         <!-- Tab 2: Environment Manager Tab -->
+         <div v-show="activeTab === 'env-manager'" class="space-y-4">
+            <div class="env-layout">
+                <div class="env-sidebar">
+                    <button @click="createNewEnv">+ New Environment</button>
+                    <ul class="env-list">
+                        <li v-for="env in environments" 
+                            @click="selectEnvToEdit(env)"
+                            :class="{selected: editingEnv && editingEnv.id === env.id}">
+                            {{ env.name }}
+                        </li>
+                    </ul>
+                </div>
+
+                <div v-if="editingEnv" class="env-editor">
+                    <input v-model="editingEnv.name" placeholder="Environment Name" class="env-name-input bg-gray-800">
+                    
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Key (e.g. base_url)</th>
+                                <th>Value</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="(val, key) in editingEnv.variables" :key="key">
+                                <td><input class="bg-gray-800" type="text" v-model="tempKeys[key]" @change="renameKey(key, tempKeys[key])"></td>
+                                <td><input class="bg-gray-800" type="text" v-model="editingEnv.variables[key]"></td>
+                                <td><button @click="deleteVariable(key)">❌</button></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    
+                    <button @click="addNewVariable">+ Add Variable</button>
+                    <button @click="saveEnvironment" class="btn-save">Save Environment</button>
+                </div>
+            </div>
+         </div>
+
+         <!-- Tab 3: Configuration (The Settings Workspace) -->
          <div v-show="activeTab === 'config'" class="space-y-4">
             <div class="bg-gray-800 p-6 rounded-lg border border-gray-700">
                 <h2 class="text-xl font-bold mb-4">Request Headers</h2>
